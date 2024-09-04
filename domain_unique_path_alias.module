@@ -9,7 +9,6 @@ use Drupal\Core\Entity\ContentEntityType;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Language\LanguageInterface;
-use Drupal\domain_unique_path_alias\DomainUniquePathAliasHelper;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
 use Drupal\path_alias\PathAliasInterface;
@@ -20,13 +19,12 @@ use Drupal\path_alias\PathAliasInterface;
 function domain_unique_path_alias_entity_presave(EntityInterface $entity) {
   if ($entity instanceof PathAliasInterface) {
     // Get domains configuration.
-    $options = \Drupal::entityTypeManager()->getStorage('domain')
+    $options = \Drupal::entityTypeManager()
+      ->getStorage('domain')
       ->loadOptionsList();
 
-    $helper = \Drupal::service('domain_unique_path_alias.helper');
-    assert($helper instanceof DomainUniquePathAliasHelper);
-
     // Get domain_id from get request param.
+    $helper = \Drupal::service('domain_unique_path_alias.helper');
     $domain_id = $helper->getDomainIdByRequest();
 
     // Get domain_id from field_domain_source field.
@@ -62,14 +60,19 @@ function domain_unique_path_alias_entity_presave(EntityInterface $entity) {
       /** @var \Drupal\path_alias\Entity\PathAlias $entity */
       $entity->set('domain_id', $domain_id);
     }
-  }
-  elseif ($entity instanceof NodeInterface) {
+  } elseif ($entity instanceof NodeInterface) {
+    // Get domain_id from entity.
     $helper = \Drupal::service('domain_unique_path_alias.helper');
-    assert($helper instanceof DomainUniquePathAliasHelper);
     $node_domain_id = $helper->getDomainIdFromEntity($entity);
     if (!empty($node_domain_id)) {
-      $path_alias = \Drupal::entityTypeManager()->getStorage('path_alias')->loadByProperties(['path' => '/node/' . $entity->id()]);
+      $path_alias = \Drupal::entityTypeManager()
+        ->getStorage('path_alias')
+        ->loadByProperties([
+          'path' => '/node/' . $entity->id(),
+          'langcode' => $entity->language()->getId(),
+        ]);
       if ($path_alias) {
+        /** @var PathDrupal\path_alias\PathAliasInterface $path_alias */
         $path_alias = reset($path_alias);
         $path_alias_domain_id = $path_alias->get('domain_id')->getString();
         if ($node_domain_id != $path_alias_domain_id) {
