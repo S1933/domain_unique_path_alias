@@ -60,7 +60,8 @@ function domain_unique_path_alias_entity_presave(EntityInterface $entity) {
       /** @var \Drupal\path_alias\Entity\PathAlias $entity */
       $entity->set('domain_id', $domain_id);
     }
-  } elseif ($entity instanceof NodeInterface) {
+  }
+  elseif ($entity instanceof NodeInterface) {
     // Get domain_id from entity.
     $helper = \Drupal::service('domain_unique_path_alias.helper');
     $node_domain_id = $helper->getDomainIdFromEntity($entity);
