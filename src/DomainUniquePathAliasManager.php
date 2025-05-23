@@ -7,7 +7,6 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\path_alias\AliasManagerInterface;
-use Drupal\path_alias\PathAliasInterface;
 
 /**
  * The path alias manager decorator.
@@ -72,8 +71,8 @@ class DomainUniquePathAliasManager implements AliasManagerInterface {
    * {@inheritdoc}
    */
   public function getPathByAlias($alias, $langcode = NULL) {
-    // Do not process asset files.
-    if ($this->isAssetFile($alias)) {
+    // Do not process asset files and alias non exist.
+    if ($this->isAssetFile($alias) || $this->helper->isExistingAlias($alias) === FALSE) {
       return $alias;
     }
 
@@ -83,19 +82,24 @@ class DomainUniquePathAliasManager implements AliasManagerInterface {
       ->getId();
 
     $domain_id = $this->helper->getDomainIdByRequest();
-
     if ($alias && $domain_id && $langcode) {
       $properties = [
         'alias' => $alias,
         'domain_id' => $domain_id,
         'langcode' => $langcode,
       ];
+
       $path_aliases = $this->entityTypeManager
         ->getStorage('path_alias')
         ->loadByProperties($properties);
 
+      if (count($path_aliases) === 0) {
+        $this->helper->get404Path($domain_id);
+      }
+
       foreach ($path_aliases as $path_alias) {
-        if ($path_alias instanceof PathAliasInterface) {
+        $path_domain_id = $path_alias->get('domain_id')->getString();
+        if ($domain_id === $path_domain_id) {
           return $path_alias->getPath();
         }
       }

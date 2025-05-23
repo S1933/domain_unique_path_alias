@@ -2,6 +2,7 @@
 
 namespace Drupal\domain_unique_path_alias;
 
+use Drupal\Core\Config\ConfigFactory;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\domain\DomainInterface;
@@ -23,11 +24,14 @@ class DomainUniquePathAliasHelper {
    *   The domain negotiator.
    * @param \Symfony\Component\HttpFoundation\RequestStack $requestStack
    *   The request stack.
+   * @param \Drupal\Core\Config\ConfigFactory $configFactory
+   *   The config factory.
    */
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
     protected DomainNegotiatorInterface $domainNegotiator,
     protected RequestStack $requestStack,
+    protected ConfigFactory $configFactory,
   ) {}
 
   /**
@@ -106,6 +110,38 @@ class DomainUniquePathAliasHelper {
     }
 
     return $domain_id;
+  }
+
+  /**
+   * Get 404 path.
+   *
+   * @param string $domain_id
+   *   The domain id.
+   *
+   * @return string|null
+   *   Return 404 path.
+   */
+  public function get404Path(string $domain_id): ?string {
+    $domain_config = $this->configFactory
+      ->get('domain.config.' . $domain_id . '.system.site')
+      ?->get('page.404');
+    $global_config = $this->configFactory
+      ->get('system.site')
+      ?->get('page.404');
+
+    return $domain_config ?? $global_config;
+  }
+
+  /**
+   * Gets if the current alias exist.
+   *
+   * @return bool
+   *   Boolean if alias exist.
+   */
+  public function isExistingAlias(string $alias): bool {
+    return !empty($this->entityTypeManager
+      ->getStorage('path_alias')
+      ->loadByProperties(['alias' => $alias]));
   }
 
 }

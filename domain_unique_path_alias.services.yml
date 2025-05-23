@@ -41,3 +41,4 @@ services:
       - '@entity_type.manager'
       - '@domain.negotiator'
       - '@request_stack'
+      - '@config.factory'
