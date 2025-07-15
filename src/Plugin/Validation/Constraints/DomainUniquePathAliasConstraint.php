@@ -7,13 +7,11 @@ use Drupal\Core\Path\Plugin\Validation\Constraint\UniquePathAliasConstraint;
 /**
  * Constraint validator for a Domain unique path alias.
  */
-class DomainUniquePathAliasConstraint extends UniquePathAliasConstraint {
+final class DomainUniquePathAliasConstraint extends UniquePathAliasConstraint {
 
   /**
    * The domain violation message.
-   *
-   * @var string
    */
-  public $messageDomain = 'The alias %alias is already in use in this domain (%domain).';
+  public string $messageDomain = 'The alias %alias is already in use in this domain (%domain).';
 
 }

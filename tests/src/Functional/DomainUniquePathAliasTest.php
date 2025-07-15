@@ -2,7 +2,6 @@
 
 namespace Drupal\Tests\domain_unique_path_alias\Functional;
 
-use Drupal\domain_access\DomainAccessManagerInterface;
 use Drupal\domain_source\DomainSourceElementManagerInterface;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Tests\domain\Traits\DomainTestTrait;
@@ -75,7 +74,7 @@ class DomainUniquePathAliasTest extends BrowserTestBase {
     $this->database = \Drupal::database();
 
     // Create 3 test domains.
-    $this->domainCreateTestDomains(3);
+    $this->domainCreateTestDomains(5);
     $this->domains = $this->container->get('entity_type.manager')->getStorage('domain')->loadMultiple();
 
     $this->configureTrustedHostPatterns();
@@ -129,9 +128,12 @@ class DomainUniquePathAliasTest extends BrowserTestBase {
   private function createArticle(string $alias, string $domain_key) {
     return $this->drupalCreateNode([
       'type' => 'article',
-      'path' => ['alias' => $alias],
-      DomainAccessManagerInterface::DOMAIN_ACCESS_FIELD => [$this->domains[$domain_key]->id()],
-      DomainSourceElementManagerInterface::DOMAIN_SOURCE_FIELD => [$this->domains[$domain_key]->id()],
+      'path' => [
+        'alias' => $alias,
+      ],
+      DomainSourceElementManagerInterface::DOMAIN_SOURCE_FIELD => [
+        $this->domains[$domain_key]->id(),
+      ],
     ]);
   }
 
@@ -140,6 +142,7 @@ class DomainUniquePathAliasTest extends BrowserTestBase {
    */
   public function testDomainUniquePathAlias(): void {
     $this->testAliasGeneration();
+    $this->testUpdatePathAliasEntity();
     $this->testAliasConstraintValidation();
     $this->testNodeDeletion();
   }
@@ -185,10 +188,58 @@ class DomainUniquePathAliasTest extends BrowserTestBase {
     // Delete node_3 and verify 404.
     $this->drupalGet('node/' . $node_id . '/delete');
     $this->submitForm([], 'Delete');
-
     $this->rebuildContainer();
+
     $this->drupalGet('node/' . $node_id);
     $this->assertSession()->statusCodeEquals(404);
+  }
+
+  /**
+   * Change node 1 domain_id and check path_alias entity.
+   */
+  private function testUpdatePathAliasEntity(): void {
+    $path_alias = $this->container->get('entity_type.manager')
+      ->getStorage('path_alias')
+      ->loadByProperties([
+        'path' => '/node/1',
+      ]);
+    $path_alias = reset($path_alias);
+    $domain_id = $path_alias->get('domain_id')->getString();
+    $this->assertEquals('example_com', $domain_id);
+
+    $this->drupalGet('node/1/edit');
+    $edit = [
+      'field_domain_source' => 'four_example_com',
+    ];
+    $this->submitForm($edit, 'Save');
+    $this->rebuildContainer();
+
+    // After: four_example_com.
+    $path_alias = $this->container->get('entity_type.manager')
+      ->getStorage('path_alias')
+      ->loadByProperties([
+        'path' => '/node/1',
+      ]);
+    $path_alias = reset($path_alias);
+    $domain_id = $path_alias->get('domain_id')->getString();
+    $this->assertEquals('four_example_com', $domain_id);
+
+    $this->drupalGet('node/1/edit');
+    $edit = [
+      'field_domain_source' => 'example_com',
+    ];
+    $this->submitForm($edit, 'Save');
+    $this->rebuildContainer();
+
+    // Reset: example_com.
+    $path_alias = $this->container->get('entity_type.manager')
+      ->getStorage('path_alias')
+      ->loadByProperties([
+        'path' => '/node/1',
+      ]);
+    $path_alias = reset($path_alias);
+    $domain_id = $path_alias->get('domain_id')->getString();
+    $this->assertEquals('example_com', $domain_id);
   }
 
 }
