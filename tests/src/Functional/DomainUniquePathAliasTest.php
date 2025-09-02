@@ -3,8 +3,10 @@
 namespace Drupal\Tests\domain_unique_path_alias\Functional;
 
 use Drupal\domain_source\DomainSourceElementManagerInterface;
+use Drupal\pathauto\PathautoState;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Tests\domain\Traits\DomainTestTrait;
+use Drupal\Tests\pathauto\Functional\PathautoTestHelperTrait;
 
 /**
  * Tests path alias on different domains.
@@ -14,6 +16,7 @@ use Drupal\Tests\domain\Traits\DomainTestTrait;
 class DomainUniquePathAliasTest extends BrowserTestBase {
 
   use DomainTestTrait;
+  use PathautoTestHelperTrait;
 
   /**
    * We use the standard profile for testing.
@@ -124,17 +127,22 @@ class DomainUniquePathAliasTest extends BrowserTestBase {
 
   /**
    * Helper function to create an article node with a domain-specific alias.
+   *
+   * @return \Drupal\node\NodeInterface
+   *   The created node entity.
    */
   private function createArticle(string $alias, string $domain_key) {
-    return $this->drupalCreateNode([
+    $node = $this->drupalCreateNode([
       'type' => 'article',
-      'path' => [
-        'alias' => $alias,
-      ],
       DomainSourceElementManagerInterface::DOMAIN_SOURCE_FIELD => [
         $this->domains[$domain_key]->id(),
       ],
     ]);
+    $this->saveEntityAlias($node, $alias);
+    $node->path->pathauto = PathautoState::CREATE;
+    $node->save();
+
+    return $node;
   }
 
   /**
@@ -151,11 +159,9 @@ class DomainUniquePathAliasTest extends BrowserTestBase {
    * Tests if node aliases are generated correctly per domain.
    */
   private function testAliasGeneration(): void {
-    $this->drupalGet('admin/content');
-
-    $this->assertSession()->responseContains($this->domains['example_com']->getPath() . 'contact" hreflang="en">');
-    $this->assertSession()->responseContains($this->domains['example_com']->getPath() . 'contact-bis" hreflang="en">');
-    $this->assertSession()->responseContains($this->domains['one_example_com']->getPath() . 'contact" hreflang="en">');
+    $this->assertEntityAlias($this->nodes['node_1'], '/contact');
+    $this->assertEntityAlias($this->nodes['node_2'], '/contact-bis');
+    $this->assertEntityAlias($this->nodes['node_3'], '/contact');
   }
 
   /**
