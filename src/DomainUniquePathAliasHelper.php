@@ -139,9 +139,13 @@ class DomainUniquePathAliasHelper {
    *   Boolean if alias exist.
    */
   public function isExistingAlias(string $alias): bool {
-    return !empty($this->entityTypeManager
+    return $this->entityTypeManager
       ->getStorage('path_alias')
-      ->loadByProperties(['alias' => $alias]));
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('alias', (array) $alias, 'IN')
+      ->count()
+      ->execute() > 0;
   }
 
 }
