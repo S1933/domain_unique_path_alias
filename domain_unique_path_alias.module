@@ -44,10 +44,8 @@ function domain_unique_path_alias_path_alias_presave(PathAliasInterface $path_al
   $path = explode("/", $path_alias->getPath());
   if (isset($path[1], $path[2]) && $path[1] === 'node' && is_numeric($path[2])) {
     $request = \Drupal::requestStack()->getCurrentRequest();
-    if ($request->attributes->has('domain_id')) {
-      $domain_id = $request->attributes->get('domain_id');
-    }
-    else {
+    $domain_id = $request->attributes->get('domain_id');
+    if ($domain_id === NULL) {
       $node = Node::load($path[2]);
       if ($node instanceof NodeInterface) {
         $langcode = \Drupal::languageManager()
