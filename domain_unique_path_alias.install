@@ -2,6 +2,12 @@
 
 /**
  * @file
+ */
+
+use Drupal\Component\Utility\DeprecationHelper;
+
+/**
+ * @file
  * Install, update, and uninstall functions for domain_unique_path_alias.
  *
  * @ingroup domain_unique_path_alias
@@ -43,6 +49,6 @@ function domain_unique_path_alias_install($is_syncing) {
 function domain_unique_path_alias_uninstall() {
   // Do a pass of purging on deleted Field API data, if any exists.
   $limit = \Drupal::config('field.settings')->get('purge_batch_size');
-  field_purge_batch($limit);
+  DeprecationHelper::backwardsCompatibleCall(\Drupal::VERSION, '11.4.0', fn() => \Drupal::service('Drupal\Core\Field\FieldPurger')->purgeBatch($limit), fn() => field_purge_batch($limit));
   \Drupal::entityTypeManager()->clearCachedDefinitions();
 }

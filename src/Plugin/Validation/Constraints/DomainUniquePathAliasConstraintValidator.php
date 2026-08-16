@@ -31,7 +31,7 @@ class DomainUniquePathAliasConstraintValidator extends UniquePathAliasConstraint
   /**
    * {@inheritdoc}
    */
-  public function validate($entity, Constraint $constraint): void {
+  public function validate(mixed $entity, Constraint $constraint): void {
     /** @var \Drupal\path_alias\PathAliasInterface $entity */
     $path = $entity->getPath();
     $alias = $entity->getAlias();

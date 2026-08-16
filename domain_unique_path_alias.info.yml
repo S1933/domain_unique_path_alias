@@ -2,7 +2,7 @@ name: Domain Unique Path Alias
 description: Allow unique path alias by domain entity for different contents.
 package: Domain
 type: module
-core_version_requirement: ^9.4 || ^10 || ^11
+core_version_requirement: ^10.1 || ^11 || ^12
 dependencies:
   - domain:domain
   - domain:domain_source

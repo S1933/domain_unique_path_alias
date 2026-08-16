@@ -2,6 +2,8 @@
 
 namespace Drupal\Tests\domain_unique_path_alias\Functional;
 
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Drupal\domain_source\DomainSourceElementManagerInterface;
 use Drupal\pathauto\PathautoState;
 use Drupal\Tests\BrowserTestBase;
@@ -13,6 +15,8 @@ use Drupal\Tests\pathauto\Functional\PathautoTestHelperTrait;
  *
  * @group domain_unique_path_alias
  */
+#[Group('domain_unique_path_alias')]
+#[RunTestsInSeparateProcesses]
 class DomainUniquePathAliasTest extends BrowserTestBase {
 
   use DomainTestTrait;

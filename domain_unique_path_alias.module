@@ -5,85 +5,40 @@
  * Hook implementations for this module.
  */
 
+use Drupal\Core\Hook\Attribute\LegacyHook;
+use Drupal\domain_unique_path_alias\Hook\DomainUniquePathAliasHooks;
 use Drupal\Core\Entity\ContentEntityType;
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Field\BaseFieldDefinition;
-use Drupal\Core\Language\LanguageInterface;
-use Drupal\node\Entity\Node;
-use Drupal\node\NodeInterface;
 use Drupal\path_alias\PathAliasInterface;
 
 /**
  * Implements hook_ENTITY_TYPE_presave().
  */
+#[LegacyHook]
 function domain_unique_path_alias_node_presave(EntityInterface $entity) {
-  $helper = \Drupal::service('domain_unique_path_alias.helper');
-  if ($domain_id = $helper->getDomainIdFromEntity($entity)) {
-    $path_alias = \Drupal::entityTypeManager()
-      ->getStorage('path_alias')
-      ->loadByProperties([
-        'path' => '/node/' . $entity->id(),
-        'langcode' => $entity->language()->getId(),
-      ]);
-    $path_alias = reset($path_alias);
-    if ($path_alias instanceof PathAliasInterface) {
-      $path_alias_domain_id = $path_alias->get('domain_id')->getString();
-      if ($domain_id != $path_alias_domain_id) {
-        $request = \Drupal::requestStack()->getCurrentRequest();
-        $request->attributes->set('domain_id', $domain_id);
-        $path_alias->save();
-      }
-    }
-  }
+  \Drupal::service(DomainUniquePathAliasHooks::class)->nodePresave($entity);
 }
 
 /**
  * Implements hook_ENTITY_TYPE_presave().
  */
+#[LegacyHook]
 function domain_unique_path_alias_path_alias_presave(PathAliasInterface $path_alias) {
-  $path = explode("/", $path_alias->getPath());
-  if (isset($path[1], $path[2]) && $path[1] === 'node' && is_numeric($path[2])) {
-    $request = \Drupal::requestStack()->getCurrentRequest();
-    $domain_id = $request->attributes->get('domain_id');
-    if ($domain_id === NULL) {
-      $node = Node::load($path[2]);
-      if ($node instanceof NodeInterface) {
-        $langcode = \Drupal::languageManager()
-          ->getCurrentLanguage(LanguageInterface::TYPE_CONTENT)
-          ->getId();
-        $langcode = $path_alias->get('langcode')->getString() ?? $langcode;
-        $translation_languages = $node->getTranslationLanguages();
-        if (in_array($langcode, array_keys($translation_languages))) {
-          $helper = \Drupal::service('domain_unique_path_alias.helper');
-          $domain_id = $helper->getDomainIdFromEntity($node);
-        }
-      }
-    }
-    if ($path_alias->get('domain_id')->getString() != $domain_id) {
-      $path_alias->set('domain_id', $domain_id);
-    }
-  }
+  \Drupal::service(DomainUniquePathAliasHooks::class)->pathAliasPresave($path_alias);
 }
 
 /**
  * Implements hook_entity_base_field_info().
  */
+#[LegacyHook]
 function domain_unique_path_alias_entity_base_field_info(ContentEntityType $entity_type) {
-  $fields = [];
-  if ($entity_type->id() === 'path_alias') {
-    $fields['domain_id'] = BaseFieldDefinition::create('string')
-      ->setLabel('Domain Id')
-      ->setDescription('Domain identification.');
-  }
-
-  return $fields;
+  return \Drupal::service(DomainUniquePathAliasHooks::class)->entityBaseFieldInfo($entity_type);
 }
 
 /**
  * Implements hook_validation_constraint_alter().
  */
+#[LegacyHook]
 function domain_unique_path_alias_validation_constraint_alter(array &$definitions) {
-  if (isset($definitions['UniquePathAlias'])) {
-    $definitions['UniquePathAlias']['class'] = '\\Drupal\\domain_unique_path_alias\\Plugin\\Validation\\Constraints\\DomainUniquePathAliasConstraint';
-  }
+  \Drupal::service(DomainUniquePathAliasHooks::class)->validationConstraintAlter($definitions);
 }

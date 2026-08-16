@@ -42,3 +42,7 @@ services:
       - '@domain.negotiator'
       - '@request_stack'
       - '@config.factory'
+
+  Drupal\domain_unique_path_alias\Hook\DomainUniquePathAliasHooks:
+    class: Drupal\domain_unique_path_alias\Hook\DomainUniquePathAliasHooks
+    autowire: true
