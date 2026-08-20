@@ -4,8 +4,14 @@ services:
     decorates: path_alias.manager
     arguments:
       - '@domain_unique_path_alias.path_alias_manager.inner'
-      - '@entity_type.manager'
       - '@language_manager'
+      - '@domain_unique_path_alias.helper'
+      - '@domain_unique_path_alias.lookup'
+
+  domain_unique_path_alias.lookup:
+    class: Drupal\domain_unique_path_alias\DomainUniquePathAliasLookup
+    arguments:
+      - '@database'
       - '@domain_unique_path_alias.helper'
 
   domain_unique_path_alias.alias_uniquifier:
@@ -25,8 +31,9 @@ services:
       - '@entity_type.manager'
       - '@domain.negotiator'
       - '@request_stack'
-      - '@config.factory'
 
   Drupal\domain_unique_path_alias\Hook\DomainUniquePathAliasHooks:
     class: Drupal\domain_unique_path_alias\Hook\DomainUniquePathAliasHooks
     autowire: true
+
+  Drupal\domain_unique_path_alias\DomainUniquePathAliasHelper: '@domain_unique_path_alias.helper'

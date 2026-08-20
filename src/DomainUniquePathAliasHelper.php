@@ -2,7 +2,6 @@
 
 namespace Drupal\domain_unique_path_alias;
 
-use Drupal\Core\Config\ConfigFactory;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\domain\DomainInterface;
@@ -24,23 +23,20 @@ class DomainUniquePathAliasHelper {
    *   The domain negotiator.
    * @param \Symfony\Component\HttpFoundation\RequestStack $requestStack
    *   The request stack.
-   * @param \Drupal\Core\Config\ConfigFactory $configFactory
-   *   The config factory.
    */
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
     protected DomainNegotiatorInterface $domainNegotiator,
     protected RequestStack $requestStack,
-    protected ConfigFactory $configFactory,
   ) {}
 
   /**
    * Gets the domain id from the path.
    *
-   * Currently works only with nodes and taxonomy terms.
+   * Currently works only with nodes.
    *
-   * The path entity's domain_source field is first checked, the then first
-   * value from the domain_access field.
+   * The node's domain_source field is read; if absent or empty,
+   * the first domain_access value is used.
    *
    * @param string $path
    *   The path to get the domain id from.
@@ -51,20 +47,11 @@ class DomainUniquePathAliasHelper {
   public function getPathDomainId(string $path): ?string {
     $path = ltrim($path, '/');
     $parts = explode('/', $path);
-    $id = end($parts);
-    switch ($parts[0]) {
-      case 'taxonomy':
-        /** @var \Drupal\taxonomy\TermInterface $entity */
-        $entity = $this->entityTypeManager->getStorage('taxonomy_term')->load($id);
-        break;
-
-      case 'node':
-        /** @var \Drupal\node\NodeInterface $entity */
-        $entity = $this->entityTypeManager->getStorage('node')->load($id);
-        break;
+    if ($parts[0] !== 'node' || !isset($parts[1]) || !is_numeric($parts[1])) {
+      return NULL;
     }
-
-    return isset($entity) ? $this->getDomainIdFromEntity($entity) : NULL;
+    $entity = $this->entityTypeManager->getStorage('node')->load($parts[1]);
+    return $entity ? $this->getDomainIdFromEntity($entity) : NULL;
   }
 
   /**
@@ -110,26 +97,6 @@ class DomainUniquePathAliasHelper {
     }
 
     return $domain_id;
-  }
-
-  /**
-   * Get 404 path.
-   *
-   * @param string $domain_id
-   *   The domain id.
-   *
-   * @return string|null
-   *   Return 404 path.
-   */
-  public function get404Path(string $domain_id): ?string {
-    $domain_config = $this->configFactory
-      ->get('domain.config.' . $domain_id . '.system.site')
-      ?->get('page.404');
-    $global_config = $this->configFactory
-      ->get('system.site')
-      ?->get('page.404');
-
-    return $domain_config ?? $global_config;
   }
 
   /**

@@ -2,16 +2,12 @@
 
 /**
  * @file
- */
-
-use Drupal\Component\Utility\DeprecationHelper;
-
-/**
- * @file
  * Install, update, and uninstall functions for domain_unique_path_alias.
  *
  * @ingroup domain_unique_path_alias
  */
+
+use Drupal\Component\Utility\DeprecationHelper;
 
 /**
  * Implements hook_install().
@@ -40,6 +36,88 @@ function domain_unique_path_alias_install($is_syncing) {
 }
 
 /**
+ * Backfill path_alias.domain_id for existing aliases.
+ *
+ * Idempotent batched update. Counts updated / neutral / unresolved rows
+ * and surfaces them as a status message on completion.
+ */
+function domain_unique_path_alias_update_9001(&$sandbox) {
+  $entity_type_manager = \Drupal::entityTypeManager();
+  $helper = \Drupal::service('domain_unique_path_alias.helper');
+  $storage = $entity_type_manager->getStorage('path_alias');
+
+  if (!isset($sandbox['progress'])) {
+    $sandbox['progress'] = 0;
+    $sandbox['updated'] = 0;
+    $sandbox['neutral'] = 0;
+    $sandbox['unresolved'] = 0;
+    $sandbox['last_id'] = 0;
+    $sandbox['total'] = (int) $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->count()
+      ->execute();
+  }
+
+  $batch_size = 50;
+  $ids = $storage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('id', $sandbox['last_id'], '>')
+    ->sort('id')
+    ->range(0, $batch_size)
+    ->execute();
+
+  if (empty($ids)) {
+    \Drupal::messenger()->addStatus(t(
+      'Backfilled @total aliases; @updated updated, @neutral neutral, @unresolved unresolved.',
+      [
+        '@total' => $sandbox['progress'],
+        '@updated' => $sandbox['updated'],
+        '@neutral' => $sandbox['neutral'],
+        '@unresolved' => $sandbox['unresolved'],
+      ]
+    ));
+    $sandbox['#finished'] = 1;
+    return;
+  }
+
+  foreach ($storage->loadMultiple($ids) as $alias) {
+    $sandbox['progress']++;
+    $sandbox['last_id'] = $alias->id();
+
+    $current = $alias->get('domain_id')->getString();
+    if ($current !== '' && $current !== NULL) {
+      continue;
+    }
+
+    $parts = explode('/', ltrim((string) $alias->getPath(), '/'));
+    if ($parts[0] !== 'node' || !isset($parts[1]) || !is_numeric($parts[1])) {
+      $sandbox['neutral']++;
+      continue;
+    }
+
+    $node = $entity_type_manager->getStorage('node')->load($parts[1]);
+    if ($node === NULL) {
+      $sandbox['unresolved']++;
+      continue;
+    }
+
+    $domain_id = $helper->getDomainIdFromEntity($node);
+    if ($domain_id === NULL) {
+      $sandbox['neutral']++;
+      continue;
+    }
+
+    $alias->set('domain_id', $domain_id);
+    $alias->save();
+    $sandbox['updated']++;
+  }
+
+  $sandbox['#finished'] = $sandbox['total'] > 0
+    ? $sandbox['progress'] / $sandbox['total']
+    : 1;
+}
+
+/**
  * Implements hook_uninstall().
  *
  * Core does not properly purge field provided by configuration entities.
@@ -51,4 +129,37 @@ function domain_unique_path_alias_uninstall() {
   $limit = \Drupal::config('field.settings')->get('purge_batch_size');
   DeprecationHelper::backwardsCompatibleCall(\Drupal::VERSION, '11.4.0', fn() => \Drupal::service('Drupal\Core\Field\FieldPurger')->purgeBatch($limit), fn() => field_purge_batch($limit));
   \Drupal::entityTypeManager()->clearCachedDefinitions();
+}
+
+/**
+ * Implements hook_requirements().
+ *
+ * Validates the cache context configuration for domain-aware alias lookup.
+ *
+ * Domain 3.x ships a 'domain' cache context; when available, nothing to
+ * warn. Domain 2.x falls back on 'url.site'; if neither context exists,
+ * the lookup cache may bleed across domains and we emit a WARNING.
+ */
+function domain_unique_path_alias_requirements($phase): array {
+  $requirements = [];
+  if ($phase !== 'runtime') {
+    return $requirements;
+  }
+
+  /** @var \Drupal\Core\Cache\Context\CacheContextsManager $contexts */
+  $contexts = \Drupal::service('cache_contexts');
+
+  if ($contexts->hasContext('domain')) {
+    return $requirements;
+  }
+
+  if (!$contexts->hasContext('url.site')) {
+    $requirements['domain_unique_path_alias_cache'] = [
+      'title' => t('Domain Unique Path Alias: cache context'),
+      'description' => t('Neither "domain" nor "url.site" cache context is available. Domain-specific aliases may not be invalidated correctly across domains.'),
+      'severity' => REQUIREMENT_WARNING,
+    ];
+  }
+
+  return $requirements;
 }

@@ -1,5 +1,12 @@
 # https://git.drupalcode.org/project/gitlab_templates/
 
+# Compatibility matrix supported by this branch (1.x):
+#   Drupal  ^10.2 || ^11
+#   Domain  ^2.0  || ^3.0
+#   Pathauto ^1.12
+# Drupal 12 support is deferred to a future branch (requires Domain branch
+# with Drupal 12 support). See remediation plan.
+
 include:
   - project: $_GITLAB_TEMPLATES_REPO
     ref: $_GITLAB_TEMPLATES_REF

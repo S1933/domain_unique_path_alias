@@ -8,16 +8,7 @@
 use Drupal\Core\Hook\Attribute\LegacyHook;
 use Drupal\domain_unique_path_alias\Hook\DomainUniquePathAliasHooks;
 use Drupal\Core\Entity\ContentEntityType;
-use Drupal\Core\Entity\EntityInterface;
 use Drupal\path_alias\PathAliasInterface;
-
-/**
- * Implements hook_ENTITY_TYPE_presave().
- */
-#[LegacyHook]
-function domain_unique_path_alias_node_presave(EntityInterface $entity) {
-  \Drupal::service(DomainUniquePathAliasHooks::class)->nodePresave($entity);
-}
 
 /**
  * Implements hook_ENTITY_TYPE_presave().

@@ -1,10 +1,11 @@
 {
     "name": "drupal/domain_unique_path_alias",
     "description": "Allow unique path alias by domain entity for different contents.",
-    "license": "GPL-2.0-or-later",
     "type": "drupal-module",
+    "license": "GPL-2.0-or-later",
     "require": {
-        "drupal/domain": "^2.0@beta",
+        "drupal/core": "^10.2 || ^11",
+        "drupal/domain": "^2.0 || ^3.0",
         "drupal/pathauto": "^1.12"
     }
 }

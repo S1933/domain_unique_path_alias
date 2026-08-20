@@ -2,67 +2,52 @@
 
 namespace Drupal\domain_unique_path_alias\Hook;
 
-use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Entity\ContentEntityType;
-use Drupal\Core\Language\LanguageInterface;
-use Drupal\node\NodeInterface;
-use Drupal\node\Entity\Node;
-use Drupal\path_alias\PathAliasInterface;
-use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Hook\Attribute\Hook;
+use Drupal\domain_unique_path_alias\DomainUniquePathAliasHelper;
+use Drupal\node\NodeInterface;
+use Drupal\path_alias\PathAliasInterface;
 
 /**
  * Hook implementations for domain_unique_path_alias.
  */
 class DomainUniquePathAliasHooks {
 
+  public function __construct(
+    protected EntityTypeManagerInterface $entityTypeManager,
+    protected DomainUniquePathAliasHelper $helper,
+  ) {}
+
   /**
-   * Implements hook_ENTITY_TYPE_presave().
+   * Sync existing aliases after the node domain has changed.
    */
-  #[Hook('node_presave')]
-  public function nodePresave(EntityInterface $entity) {
-    $helper = \Drupal::service('domain_unique_path_alias.helper');
-    if ($domain_id = $helper->getDomainIdFromEntity($entity)) {
-      $path_alias = \Drupal::entityTypeManager()->getStorage('path_alias')->loadByProperties([
-        'path' => '/node/' . $entity->id(),
-        'langcode' => $entity->language()->getId(),
-      ]);
-      $path_alias = reset($path_alias);
-      if ($path_alias instanceof PathAliasInterface) {
-        $path_alias_domain_id = $path_alias->get('domain_id')->getString();
-        if ($domain_id != $path_alias_domain_id) {
-          $request = \Drupal::requestStack()->getCurrentRequest();
-          $request->attributes->set('domain_id', $domain_id);
-          $path_alias->save();
-        }
-      }
+  #[Hook('node_update')]
+  public function nodeUpdate(NodeInterface $node): void {
+    $domain_id = $this->helper->getDomainIdFromEntity($node);
+    if (!$domain_id) {
+      return;
     }
+    $this->syncNodeAliases($node, $domain_id);
   }
 
   /**
-   * Implements hook_ENTITY_TYPE_presave().
+   * Propagate the current node domain onto a path_alias being saved.
    */
   #[Hook('path_alias_presave')]
-  public function pathAliasPresave(PathAliasInterface $path_alias) {
-    $path = explode("/", $path_alias->getPath());
-    if (isset($path[1], $path[2]) && $path[1] === 'node' && is_numeric($path[2])) {
-      $request = \Drupal::requestStack()->getCurrentRequest();
-      $domain_id = $request->attributes->get('domain_id');
-      if ($domain_id === NULL) {
-        $node = Node::load($path[2]);
-        if ($node instanceof NodeInterface) {
-          $langcode = \Drupal::languageManager()->getCurrentLanguage(LanguageInterface::TYPE_CONTENT)->getId();
-          $langcode = $path_alias->get('langcode')->getString() ?? $langcode;
-          $translation_languages = $node->getTranslationLanguages();
-          if (in_array($langcode, array_keys($translation_languages))) {
-            $helper = \Drupal::service('domain_unique_path_alias.helper');
-            $domain_id = $helper->getDomainIdFromEntity($node);
-          }
-        }
-      }
-      if ($path_alias->get('domain_id')->getString() != $domain_id) {
-        $path_alias->set('domain_id', $domain_id);
-      }
+  public function pathAliasPresave(PathAliasInterface $path_alias): void {
+    $parts = explode('/', $path_alias->getPath());
+    if (!isset($parts[1], $parts[2]) || $parts[1] !== 'node' || !is_numeric($parts[2])) {
+      return;
+    }
+    $node = $this->entityTypeManager->getStorage('node')->load($parts[2]);
+    if (!$node instanceof NodeInterface) {
+      return;
+    }
+    $domain_id = $this->helper->getDomainIdFromEntity($node) ?? '';
+    if ($path_alias->get('domain_id')->getString() !== $domain_id) {
+      $path_alias->set('domain_id', $domain_id);
     }
   }
 
@@ -73,7 +58,9 @@ class DomainUniquePathAliasHooks {
   public function entityBaseFieldInfo(ContentEntityType $entity_type) {
     $fields = [];
     if ($entity_type->id() === 'path_alias') {
-      $fields['domain_id'] = BaseFieldDefinition::create('string')->setLabel('Domain Id')->setDescription('Domain identification.');
+      $fields['domain_id'] = BaseFieldDefinition::create('string')
+        ->setLabel('Domain Id')
+        ->setDescription('Domain identification.');
     }
     return $fields;
   }
@@ -85,6 +72,23 @@ class DomainUniquePathAliasHooks {
   public function validationConstraintAlter(array &$definitions) {
     if (isset($definitions['UniquePathAlias'])) {
       $definitions['UniquePathAlias']['class'] = '\Drupal\domain_unique_path_alias\Plugin\Validation\Constraints\DomainUniquePathAliasConstraint';
+    }
+  }
+
+  /**
+   * Updates all aliases for a node to the given domain_id.
+   */
+  private function syncNodeAliases(NodeInterface $node, string $domain_id): void {
+    $storage = $this->entityTypeManager->getStorage('path_alias');
+    $ids = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('path', '/node/' . $node->id())
+      ->execute();
+    foreach ($storage->loadMultiple($ids) as $alias) {
+      if ($alias->get('domain_id')->getString() !== $domain_id) {
+        $alias->set('domain_id', $domain_id);
+        $alias->save();
+      }
     }
   }
 

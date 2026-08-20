@@ -56,44 +56,49 @@ class DomainUniquePathAliasUniquifier implements AliasUniquifierInterface {
   public function isReserved($alias, $source, $langcode = LanguageInterface::LANGCODE_NOT_SPECIFIED, ?string $domain_id = NULL) {
     $domain_id ??= $this->helper->getPathDomainId($source);
 
-    // Check if this domain alias already exists.
-    $query = $this->database->select('path_alias', 'path_alias')
-      ->fields('path_alias', ['langcode', 'path', 'alias'])
-      ->condition('domain_id', $domain_id)
-      ->condition('alias', $alias);
-    $result = $query->execute()->fetchAssoc();
-
-    if (isset($result['path'])) {
-      $existing_path = $result['path'];
-      if ($existing_path !== $alias) {
-        // If it is an alias for the provided source,
-        // it is allowed to keep using it. If not, then it is reserved.
-        return $existing_path !== $source;
-      }
+    // Fall back to global uniqueness when domain is unknown.
+    if ($domain_id === NULL || $domain_id === '') {
+      return $this->inner->isReserved($alias, $source, $langcode);
     }
 
-    // Then check if there is a route with the same path.
-    if ($this->inner->isRoute($alias)) {
-      return TRUE;
-    }
-
-    // Finally check if any other modules have reserved the alias.
-    $args = [
-      $alias,
-      $source,
-      $langcode,
-    ];
-    $implementations = $this->moduleHandler->invokeAll('pathauto_is_alias_reserved');
-    foreach ($implementations as $module) {
-      $result = $this->moduleHandler->invoke($module, 'pathauto_is_alias_reserved', $args);
-      if (!empty($result)) {
-        // As soon as the first module says that an alias is in fact reserved,
-        // then there is no point in checking the rest of the modules.
+    // Domain-scoped collision check, with langcode priority: exact > und.
+    foreach ([$langcode, LanguageInterface::LANGCODE_NOT_SPECIFIED] as $lc) {
+      $existing_path = $this->database->select('path_alias', 'pa')
+        ->fields('pa', ['path'])
+        ->condition('alias', $alias)
+        ->condition('status', 1)
+        ->condition('langcode', $lc)
+        ->condition('domain_id', $domain_id)
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+      if ($existing_path !== FALSE && (string) $existing_path !== $source) {
         return TRUE;
       }
     }
 
-    return FALSE;
+    // Route check; fall back to inner when isRoute is unavailable.
+    if (method_exists($this->inner, 'isRoute')) {
+      if ($this->inner->isRoute($alias)) {
+        return TRUE;
+      }
+    }
+    elseif ($this->inner->isReserved($alias, $source, $langcode)) {
+      return TRUE;
+    }
+
+    // pathauto_is_alias_reserved via short-circuiting invokeAllWith.
+    $reserved = FALSE;
+    $this->moduleHandler->invokeAllWith(
+      'pathauto_is_alias_reserved',
+      function (callable $hook) use (&$reserved, $alias, $source, $langcode): void {
+        if (!$reserved && $hook($alias, $source, $langcode)) {
+          $reserved = TRUE;
+        }
+      },
+    );
+
+    return $reserved;
   }
 
 }

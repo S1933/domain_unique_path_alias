@@ -3,7 +3,6 @@
 namespace Drupal\domain_unique_path_alias;
 
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\path_alias\AliasManagerInterface;
@@ -23,13 +22,6 @@ class DomainUniquePathAliasManager implements AliasManagerInterface {
   protected $inner;
 
   /**
-   * The entity type manager.
-   *
-   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
-   */
-  protected $entityTypeManager;
-
-  /**
    * Language manager.
    *
    * @var \Drupal\Core\Language\LanguageManagerInterface
@@ -44,68 +36,58 @@ class DomainUniquePathAliasManager implements AliasManagerInterface {
   protected $helper;
 
   /**
+   * The domain-aware alias lookup.
+   *
+   * @var \Drupal\domain_unique_path_alias\DomainUniquePathAliasLookup
+   */
+  protected $lookup;
+
+  /**
    * Constructs an AliasManager with DomainPathAliasManager.
    *
    * @param \Drupal\path_alias\AliasManagerInterface $inner
    *   The decorated alias manager.
-   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   *   The entity type manager.
    * @param \Drupal\Core\Language\LanguageManagerInterface $language_manager
    *   The language manager.
    * @param \Drupal\domain_unique_path_alias\DomainUniquePathAliasHelper $helper
    *   The helper service.
+   * @param \Drupal\domain_unique_path_alias\DomainUniquePathAliasLookup $lookup
+   *   The domain-aware alias lookup.
    */
   public function __construct(
     AliasManagerInterface $inner,
-    EntityTypeManagerInterface $entity_type_manager,
     LanguageManagerInterface $language_manager,
     DomainUniquePathAliasHelper $helper,
+    DomainUniquePathAliasLookup $lookup,
   ) {
     $this->inner = $inner;
-    $this->entityTypeManager = $entity_type_manager;
     $this->languageManager = $language_manager;
     $this->helper = $helper;
+    $this->lookup = $lookup;
   }
 
   /**
    * {@inheritdoc}
    */
   public function getPathByAlias($alias, $langcode = NULL) {
-    // Do not process asset files and alias non exist.
-    if ($this->isAssetFile($alias) || $this->helper->isExistingAlias($alias) === FALSE) {
+    if ($this->isAssetFile($alias)) {
       return $alias;
     }
 
-    // @todo Investigate if TYPE_CONTENT is the correct type or should be editable in modules settings.
     $langcode = $langcode ?: $this->languageManager
       ->getCurrentLanguage(LanguageInterface::TYPE_CONTENT)
       ->getId();
 
     $domain_id = $this->helper->getDomainIdByRequest();
-    if ($alias && $domain_id && $langcode) {
-      $properties = [
-        'alias' => $alias,
-        'domain_id' => $domain_id,
-        'langcode' => $langcode,
-      ];
 
-      $path_aliases = $this->entityTypeManager
-        ->getStorage('path_alias')
-        ->loadByProperties($properties);
-
-      if (count($path_aliases) === 0) {
-        $this->helper->get404Path($domain_id);
-      }
-
-      foreach ($path_aliases as $path_alias) {
-        $path_domain_id = $path_alias->get('domain_id')->getString();
-        if ($domain_id === $path_domain_id) {
-          return $path_alias->getPath();
-        }
-      }
+    // Without domain context, defer to core resolution.
+    if (!$alias || !$domain_id || !$langcode) {
+      return $this->inner->getPathByAlias($alias, $langcode);
     }
 
-    return $this->inner->getPathByAlias($alias, $langcode);
+    // Keep cross-domain aliases unresolved.
+    $path = $this->lookup->lookup($alias, $langcode, $domain_id);
+    return $path ?? $alias;
   }
 
   /**
