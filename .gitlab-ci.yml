@@ -10,3 +10,4 @@ include:
 
 variables:
   OPT_IN_TEST_NEXT_MAJOR: 0
+  _CSPELL_WORDS: 'uniquify'
