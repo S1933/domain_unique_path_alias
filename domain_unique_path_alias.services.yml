@@ -8,32 +8,16 @@ services:
       - '@language_manager'
       - '@domain_unique_path_alias.helper'
 
-  domain_unique_path_alias.generator:
-    class: Drupal\domain_unique_path_alias\DomainUniquePathAliasGenerator
-    decorates: pathauto.generator
-    arguments:
-      - '@domain_unique_path_alias.generator.inner'
-      - '@config.factory'
-      - '@module_handler'
-      - '@token'
-      - '@pathauto.alias_cleaner'
-      - '@pathauto.alias_storage_helper'
-      - '@domain_unique_path_alias.alias_uniquifier'
-      - '@pathauto.verbose_messenger'
-      - '@token.entity_mapper'
-      - '@entity_type.manager'
-      - '@messenger'
-      - '@domain_unique_path_alias.helper'
-
   domain_unique_path_alias.alias_uniquifier:
     class: Drupal\domain_unique_path_alias\DomainUniquePathAliasUniquifier
+    decorates: pathauto.alias_uniquifier
     arguments:
+      - '@domain_unique_path_alias.alias_uniquifier.inner'
       - '@config.factory'
       - '@pathauto.alias_storage_helper'
       - '@module_handler'
-      - '@router.route_provider'
-      - '@path_alias.manager'
       - '@database'
+      - '@domain_unique_path_alias.helper'
 
   domain_unique_path_alias.helper:
     class: Drupal\domain_unique_path_alias\DomainUniquePathAliasHelper

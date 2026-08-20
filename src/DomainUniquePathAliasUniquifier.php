@@ -7,55 +7,36 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Language\LanguageInterface;
-use Drupal\Core\Routing\RouteProviderInterface;
-use Drupal\path_alias\AliasManagerInterface;
 use Drupal\pathauto\AliasStorageHelperInterface;
-use Drupal\pathauto\AliasUniquifier;
+use Drupal\pathauto\AliasUniquifierInterface;
 
 /**
  * Provides a utility for creating a unique path alias.
  */
-class DomainUniquePathAliasUniquifier extends AliasUniquifier {
+class DomainUniquePathAliasUniquifier implements AliasUniquifierInterface {
 
-  /**
-   * Active database connection.
-   *
-   * @var \Drupal\Core\Database\Connection
-   */
-  protected $database;
-
-  /**
-   * {@inheritdoc}
-   */
   public function __construct(
-    ConfigFactoryInterface $config_factory,
-    AliasStorageHelperInterface $alias_storage_helper,
-    ModuleHandlerInterface $module_handler,
-    RouteProviderInterface $route_provider,
-    AliasManagerInterface $alias_manager,
-    Connection $database,
+    protected AliasUniquifierInterface $inner,
+    protected ConfigFactoryInterface $configFactory,
+    protected AliasStorageHelperInterface $aliasStorageHelper,
+    protected ModuleHandlerInterface $moduleHandler,
+    protected Connection $database,
+    protected DomainUniquePathAliasHelper $helper,
   ) {
-    parent::__construct(
-      $config_factory,
-      $alias_storage_helper,
-      $module_handler,
-      $route_provider,
-      $alias_manager
-    );
-    $this->database = $database;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function uniquify(&$alias, $source, $langcode, $domain_id = NULL) {
-    $config = $this->configFactory->get('pathauto.settings');
+  public function uniquify(&$alias, $source, $langcode, ?string $domain_id = NULL) {
+    $domain_id ??= $this->helper->getPathDomainId($source);
 
     if (!$this->isReserved($alias, $source, $langcode, $domain_id)) {
       return;
     }
 
     // If the alias already exists, generate a new, hopefully unique, variant.
+    $config = $this->configFactory->get('pathauto.settings');
     $maxlength = min($config->get('max_length'), $this->aliasStorageHelper->getAliasSchemaMaxlength());
     $separator = $config->get('separator');
     $original_alias = $alias;
@@ -72,12 +53,8 @@ class DomainUniquePathAliasUniquifier extends AliasUniquifier {
   /**
    * {@inheritdoc}
    */
-  public function isReserved($alias, $source, $langcode = LanguageInterface::LANGCODE_NOT_SPECIFIED, $domain_id = NULL) {
-
-    // If domain id is not provided, use parent uniquifier.
-    if (empty($domain_id)) {
-      return parent::isReserved($alias, $source, $langcode);
-    }
+  public function isReserved($alias, $source, $langcode = LanguageInterface::LANGCODE_NOT_SPECIFIED, ?string $domain_id = NULL) {
+    $domain_id ??= $this->helper->getPathDomainId($source);
 
     // Check if this domain alias already exists.
     $query = $this->database->select('path_alias', 'path_alias')
@@ -96,7 +73,7 @@ class DomainUniquePathAliasUniquifier extends AliasUniquifier {
     }
 
     // Then check if there is a route with the same path.
-    if ($this->isRoute($alias)) {
+    if ($this->inner->isRoute($alias)) {
       return TRUE;
     }
 
